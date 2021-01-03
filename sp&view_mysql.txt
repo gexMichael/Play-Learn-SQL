@@ -1,0 +1,311 @@
+/****** Object:  View Orders Qry    Script Date: 08/12/2011 11:46:04 ******/
+create view Orders_Qry 
+AS
+SELECT Orders.OrderID, Orders.CustomerID, Orders.EmployeeID, Orders.OrderDate, Orders.RequiredDate, 
+	Orders.ShippedDate, Orders.shipperid, Orders.Freight, Orders.ShipName, Orders.ShipAddress, Orders.ShipCity, 
+	Orders.ShipRegion, Orders.ShipPostalCode, Orders.ShipCountry, 
+	Customers.CompanyName, Customers.Address, Customers.City, Customers.Region, Customers.PostalCode, Customers.Country
+FROM Customers INNER JOIN Orders ON Customers.CustomerID = Orders.CustomerID
+
+
+/****** Object:  View Quarterly Orders    Script Date: 08/12/2011 11:46:04 ******/
+create view Quarterly_Orders 
+AS
+SELECT DISTINCT Customers.CustomerID, Customers.CompanyName, Customers.City, Customers.Country
+FROM Customers RIGHT JOIN Orders ON Customers.CustomerID = Orders.CustomerID
+WHERE Orders.OrderDate BETWEEN '19970101' And '19971231'
+
+
+/****** Object:  View Invoices    Script Date: 08/12/2011 11:46:04 ******/
+create view Invoices 
+AS
+SELECT Orders.ShipName, Orders.ShipAddress, Orders.ShipCity, Orders.ShipRegion, Orders.ShipPostalCode, 
+	Orders.ShipCountry, Orders.CustomerID, Customers.CompanyName AS CustomerName, Customers.Address, Customers.City, 
+	Customers.Region, Customers.PostalCode, Customers.Country, 
+	(FirstName + ' ' + LastName) AS Salesperson, 
+	Orders.OrderID, Orders.OrderDate, Orders.RequiredDate, Orders.ShippedDate, Shippers.CompanyName As ShipperName, 
+	Order_Details.ProductID, Products.ProductName, Order_Details.UnitPrice, Order_Details.Quantity, 
+	Order_Details.Discount, 
+	(((Order_Details.UnitPrice*Quantity*(1-Discount)/100))*100) AS ExtendedPrice, Orders.Freight
+FROM 	Shippers INNER JOIN 
+		(Products INNER JOIN 
+			(
+				(Employees INNER JOIN 
+					(Customers INNER JOIN Orders ON Customers.CustomerID = Orders.CustomerID) 
+				ON Employees.EmployeeID = Orders.EmployeeID) 
+			INNER JOIN Order_Details ON Orders.OrderID = Order_Details.OrderID) 
+		ON Products.ProductID = Order_Details.ProductID) 
+	ON Shippers.ShipperID = Orders.shipperid
+
+	
+/****** Object:  View Product Sales for 1997    Script Date: 08/12/2011 11:46:04 ******/
+create view Product_Sales_for_1997 
+AS
+SELECT Categories.CategoryName, Products.ProductName, 
+Sum(((Order_Details.UnitPrice*Quantity*(1-Discount)/100))*100) AS ProductSales
+FROM (Categories INNER JOIN Products ON Categories.CategoryID = Products.CategoryID) 
+	INNER JOIN (Orders 
+		INNER JOIN Order_Details ON Orders.OrderID = Order_Details.OrderID) 
+	ON Products.ProductID = Order_Details.ProductID
+WHERE (((Orders.ShippedDate) Between '19970101' And '19971231'))
+GROUP BY Categories.CategoryName, Products.ProductName
+
+/****** Object:  View Current Product List    Script Date: 08/12/2011 11:46:04 ******/
+create view Current_Product_List 
+AS
+SELECT Product_List.ProductID, Product_List.ProductName
+FROM Products AS Product_List
+WHERE (((Product_List.Discontinued)=0))
+
+
+/****** Object:  View Order_Details Extended    Script Date: 08/12/2011 11:46:04 ******/
+create view Order_Details_Extended 
+AS
+SELECT OD.OrderID, OD.ProductID, Products.ProductName, 
+	OD.UnitPrice, OD.Quantity, OD.Discount, 
+	(((OD.UnitPrice*Quantity*(1-Discount)/100))*100) AS ExtendedPrice
+FROM Products INNER JOIN Order_Details OD ON Products.ProductID = OD.ProductID
+
+
+/****** Object:  View Products Above Average Price    Script Date: 08/12/2011 11:46:04 ******/
+create view Products_Above_Average_Price AS
+SELECT Products.ProductName, Products.UnitPrice
+FROM Products
+WHERE Products.UnitPrice>(SELECT AVG(UnitPrice) From Products)
+-- ORDER BY Products.UnitPrice DESC
+
+
+/****** Object:  View Products by Category    Script Date: 08/12/2011 11:46:04 ******/
+create view Products_by_Category AS
+SELECT Categories.CategoryName, Products.ProductName, Products.QuantityPerUnit, Products.UnitsInStock, Products.Discontinued
+FROM Categories INNER JOIN Products ON Categories.CategoryID = Products.CategoryID
+WHERE Products.Discontinued <> 1
+-- ORDER BY Categories.CategoryName, Products.ProductName
+
+
+/****** Object:  View Alphabetical list of products    Script Date: 08/12/2011 11:46:04 ******/
+create view Alphabetical_list_of_products AS
+SELECT Products.*, Categories.CategoryName
+FROM Categories INNER JOIN Products ON Categories.CategoryID = Products.CategoryID
+WHERE (((Products.Discontinued)=0))
+
+
+/****** Object:  View Order Subtotals    Script Date: 08/12/2011 11:46:04 ******/
+create view Order_Subtotals AS
+SELECT OD.OrderID, Sum(((OD.UnitPrice*Quantity*(1-Discount)/100))*100) AS Subtotal
+FROM Order_Details OD
+GROUP BY OD.OrderID
+
+
+/****** Object:  View Customer and Suppliers by City    Script Date: 08/12/2011 11:46:04 ******/
+create view Customer_and_Suppliers_by_City 
+AS
+SELECT City, CompanyName, ContactName, 'Customers' AS Relationship 
+FROM Customers
+UNION SELECT City, CompanyName, ContactName, 'Suppliers'
+FROM Suppliers
+-- ORDER BY City, CompanyName
+
+
+/****** Object:  View Sales Totals by Amount    Script Date: 08/12/2011 11:46:04 ******/
+create view Sales_Totals_by_Amount 
+AS
+SELECT 
+  Order_Subtotals.Subtotal AS SaleAmount, Orders.OrderID, Customers.CompanyName, Orders.ShippedDate
+FROM Customers INNER JOIN 
+	(Orders INNER JOIN Order_Subtotals ON Orders.OrderID = Order_Subtotals.OrderID) 
+	ON Customers.CustomerID = Orders.CustomerID
+WHERE (Order_Subtotals.Subtotal >2500) AND (Orders.ShippedDate BETWEEN '19970101' And '19971231')
+
+
+/****** Object:  View Summary of Sales by Quarter    Script Date: 08/12/2011 11:46:04 ******/
+create view Summary_of_Sales_by_Quarter 
+AS
+SELECT Orders.ShippedDate, Orders.OrderID, Order_Subtotals.Subtotal
+FROM Orders INNER JOIN Order_Subtotals ON Orders.OrderID = Order_Subtotals.OrderID
+WHERE Orders.ShippedDate IS NOT NULL
+-- ORDER BY Orders.ShippedDate
+
+
+/****** Object:  View Summary of Sales by Year    Script Date: 08/12/2011 11:46:04 ******/
+create view Summary_of_Sales_by_Year 
+AS
+SELECT Orders.ShippedDate, Orders.OrderID, Order_Subtotals.Subtotal
+FROM Orders INNER JOIN Order_Subtotals ON Orders.OrderID = Order_Subtotals.OrderID
+WHERE Orders.ShippedDate IS NOT NULL
+-- RDER BY Orders.ShippedDate
+
+
+/****** Object:  View Sales by Category    Script Date: 08/12/2011 11:46:04 ******/
+create view Sales_by_Category 
+AS
+SELECT Categories.CategoryID, Categories.CategoryName, Products.ProductName, 
+	Sum(ODE.ExtendedPrice) AS ProductSales
+FROM 	Categories INNER JOIN 
+		(Products INNER JOIN 
+			(Orders INNER JOIN Order_Details_Extended ODE ON Orders.OrderID = ODE.OrderID) 
+		ON Products.ProductID = ODE.ProductID) 
+	ON Categories.CategoryID = Products.CategoryID
+WHERE Orders.OrderDate BETWEEN '19970101' And '19971231'
+GROUP BY Categories.CategoryID, Categories.CategoryName, Products.ProductName
+-- ORDER BY Products.ProductName
+
+
+/****** Object:  View Category Sales for 1997    Script Date: 08/12/2011 11:46:04 ******/
+create view Category_Sales_for_1997 
+AS
+SELECT v1997.CategoryName, Sum(v1997.ProductSales) AS CategorySales
+FROM Product_Sales_for_1997 v1997
+GROUP BY v1997.CategoryName
+
+
+
+
+
+
+
+
+
+/****** OK Object:  OK StoredProcedure SalesByCategory    Script Date: 08/12/2011 11:46:02 ******/
+DELIMITER //
+CREATE or replace PROCEDURE SalesByCategory 
+(
+  _CategoryName varchar(20),
+  _OrdYear int
+)
+/*
+  call SalesByCategory('Beverages',2007);
+*/
+begin
+  if (_OrdYear != 2006 AND _OrdYear != 2007 AND _OrdYear != 2008) then
+  	set _OrdYear = 2006;
+  end if;
+
+  SELECT ProductName,
+	ROUND(SUM(OD.Quantity * (1-OD.Discount) * OD.UnitPrice), 0) TotalPurchase
+  FROM Order_Details OD, Orders O, Products P, Categories C
+  WHERE OD.OrderID = O.OrderID 
+	AND OD.ProductID = P.ProductID 
+	AND P.CategoryID = C.CategoryID
+	AND C.CategoryName = _CategoryName
+	AND DATE_FORMAT(O.OrderDate, '%Y') = _OrdYear
+  GROUP BY ProductName
+  ORDER BY ProductName;
+end;
+//
+DELIMITER ;
+
+
+/****** OK Object:  StoredProcedure CustOrdersOrders    Script Date: 08/12/2011 11:46:02 ******/
+DELIMITER //
+CREATE or replace PROCEDURE CustOrdersOrders 
+(
+  _CustomerID int
+)
+/*
+  call CustOrdersOrders(1);
+*/
+begin
+  SELECT OrderID, 
+	OrderDate,
+	RequiredDate,
+	ShippedDate
+  FROM Orders
+  WHERE CustomerID = _CustomerID
+  ORDER BY OrderID;
+end;
+//
+DELIMITER ;
+
+/****** Object:  StoredProcedure CustOrderHist    Script Date: 08/12/2011 11:46:01 ******/
+DELIMITER //
+CREATE or replace PROCEDURE CustOrderHist 
+(
+  _CustomerID int
+)
+/*
+  call CustOrderHist(1);
+*/
+begin
+  SELECT ProductName, SUM(Quantity) Total
+  FROM Products P, Order_Details OD, Orders O, Customers C
+  WHERE C.CustomerID = _CustomerID
+  AND C.CustomerID = O.CustomerID AND O.OrderID = OD.OrderID AND OD.ProductID = P.ProductID
+  GROUP BY ProductName;
+end;
+//
+DELIMITER ;
+
+/****** OK Object:  StoredProcedure CustOrdersDetail    Script Date: 08/12/2011 11:46:01 ******/
+DELIMITER //
+CREATE or replace PROCEDURE CustOrdersDetail 
+(
+  _OrderID int
+)
+/*
+  call CustOrdersDetail(10666);
+*/
+begin
+  SELECT ProductName,
+    ROUND(Od.UnitPrice, 2) UnitPrice,
+    Quantity,
+    (Discount * 100) Discount, 
+    ROUND((Quantity * (1 - Discount) * Od.UnitPrice), 2) ExtendedPrice
+  FROM Products P, Order_Details Od
+  WHERE Od.ProductID = P.ProductID and Od.OrderID = _OrderID;
+end;
+//
+DELIMITER ;
+
+/****** OK Object:  StoredProcedure Ten Most Expensive Products    Script Date: 08/12/2011 11:46:02 ******/
+DELIMITER //
+create or replace procedure Ten_Most_Expensive_Products ()
+/*
+  call Ten_Most_Expensive_Products();
+*/
+begin
+  SELECT Products.ProductName AS TenMostExpensiveProducts, Products.UnitPrice
+  FROM Products
+  ORDER BY Products.UnitPrice DESC
+  limit 10;
+end
+//
+DELIMITER ;
+
+/****** OK Object:  StoredProcedure Sales by Year    Script Date: 08/12/2011 11:46:02 ******/
+DELIMITER //
+create or replace procedure Sales_by_Year
+( 
+  _Beginning_Date Date, 
+  _Ending_Date Date
+)
+/*
+  call Sales_by_Year('2006-01-01','2006-12-31');
+*/
+begin
+  SELECT Orders.ShippedDate, Orders.OrderID, Order_Subtotals.Subtotal, year(ShippedDate) AS Year
+  FROM Orders INNER JOIN Order_Subtotals ON Orders.OrderID = Order_Subtotals.OrderID
+  WHERE Orders.ShippedDate Between _Beginning_Date And _Ending_Date;
+end;
+//
+DELIMITER ;
+
+/****** OK Object:  StoredProcedure Employee Sales by Country    Script Date: 08/12/2011 11:46:02 ******/
+DELIMITER //
+create or replace procedure Employee_Sales_by_Country 
+(
+  _Beginning_Date Date, 
+  _Ending_Date Date 
+)
+/*
+  call Employee_Sales_by_Country('2006-01-01','2006-12-31');
+*/
+begin
+  SELECT Employees.Country, Employees.LastName, Employees.FirstName, Orders.ShippedDate, Orders.OrderID, Order_Subtotals.Subtotal AS SaleAmount
+  FROM Employees INNER JOIN 
+	(Orders INNER JOIN Order_Subtotals ON Orders.OrderID = Order_Subtotals.OrderID) 
+	ON Employees.EmployeeID = Orders.EmployeeID
+  WHERE Orders.ShippedDate Between _Beginning_Date And _Ending_Date;
+end;
+//
+DELIMITER ;

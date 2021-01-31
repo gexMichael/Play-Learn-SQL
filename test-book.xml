@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<xml>
+  <book id="1" title="C# Program" author="David" price="21" />
+  <book id="2" title="Python" author="Michael" price="100" />
+</xml>
